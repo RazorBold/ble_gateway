@@ -2,7 +2,7 @@ import paho.mqtt.client as mqtt
 import json
 from datetime import datetime
 
-from ble_decoder import decode_ble_payload_field, print_decoded
+from ble_decoder import decode_ble_payload_field, print_decoded, decode_payload
 
 # MQTT Config
 MQTT_HOST = "36.92.47.218"
@@ -22,22 +22,24 @@ def on_connect(client, userdata, flags, rc):
 def on_message(client, userdata, msg):
     print(f"\n[{datetime.now()}] Message received on topic: {msg.topic}")
     try:
+        # Coba parse sebagai JSON dulu
         payload = json.loads(msg.payload.decode("utf-8"))
         print(json.dumps(payload, indent=2))
 
-        # ── Decode BLE Device Message ──────────────────────────
-        # Field 'ble_msg' berisi hex string payload BLE device
-        # Sesuaikan nama field jika berbeda di payload gateway Anda
+        # Kalau ada field BLE hex di dalam JSON
         ble_hex = payload.get("ble_msg") or payload.get("bleMSG") or payload.get("data")
         if ble_hex and isinstance(ble_hex, str):
-            print("\n--- BLE Device Message Decoded ---")
             decoded = decode_ble_payload_field(ble_hex)
             if decoded:
                 print_decoded(decoded)
-        # ──────────────────────────────────────────────────────
 
     except (json.JSONDecodeError, UnicodeDecodeError):
-        print(f"Payload (raw): {msg.payload}")
+        # Payload bukan JSON → coba decode langsung sebagai BLE hex string
+        raw_hex = msg.payload.decode("utf-8", errors="ignore").strip()
+        print(f"Payload (raw hex): {raw_hex}")
+        decoded = decode_ble_payload_field(raw_hex)
+        if decoded:
+            print_decoded(decoded)
 
 
 def on_disconnect(client, userdata, rc):
